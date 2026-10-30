@@ -10,7 +10,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
     <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
-    <title>servoom · Download</title>
+    <title>像素画廊</title>
+    <script>
+      if (!window.crossOriginIsolated && location.hostname.endsWith('.github.io') && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.register('../coi-sw.js', { scope: '../' }).then(function () {
+          if (!navigator.serviceWorker.controller) {
+            navigator.serviceWorker.addEventListener('controllerchange', function () { location.reload(); }, { once: true });
+          } else if (!sessionStorage.getItem('coi-reloaded')) {
+            sessionStorage.setItem('coi-reloaded', '1'); location.reload();
+          }
+        }).catch(function (error) { console.error('无法启用图片预览', error); });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
