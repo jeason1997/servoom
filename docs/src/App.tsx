@@ -8,6 +8,7 @@ import {
   ApiError,
   downloadBinary,
   fetchUserGallery,
+  fetchCategoryFiles,
   login,
 } from './lib/divoomApi';
 import { PyodideDecoder, type DecodedBean } from './lib/pyodideDecoder';
@@ -360,14 +361,14 @@ const translations: Record<Locale, Translation> = {
     },
     panels: {
       signIn: '1. 登录',
-      fetchArtworks: '2. 获取你的作品',
+      fetchArtworks: '2. 浏览社区或获取你的作品',
       results: '3. 结果',
       download: '4. 下载所选项目',
     },
     buttons: {
       signIn: '登录 Divoom Cloud',
       logout: '退出登录',
-      fetch: '获取作品',
+      fetch: '获取我上传的作品',
       decode: '解码',
       decoding: '正在解码…',
       raw: '原始',
@@ -985,6 +986,7 @@ function App() {
   }, [locale]);
 
   const [session, setSession] = useState<Session | null>(null);
+  const [communityCategory, setCommunityCategory] = useState(1);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordIsMd5, setPasswordIsMd5] = useState(false);
@@ -1226,6 +1228,26 @@ function App() {
     }
 
     return collected.slice(0, targetCount);
+  };
+
+  const handleFetchCommunity = async () => {
+    if (!session) return;
+    setItemsLoading(true);
+    setError(null);
+    cancelRef.current = false;
+    try {
+      const { start, count } = normalizedRange;
+      const files = await fetchInBatches(start, count,
+        (chunkStart, chunkEnd) => fetchCategoryFiles(session, {
+          classify: communityCategory, start: chunkStart, end: chunkEnd,
+        }), { isCancelled: () => cancelRef.current });
+      resetDataset(files, null);
+      if (!files.length) setError({ type: 'generic', message: '该分类没有返回作品，请尝试其他分类或稍后重试。' });
+    } catch (err) {
+      setError({ type: 'generic', message: (err as Error).message });
+    } finally {
+      setItemsLoading(false);
+    }
   };
 
   const handleFetchMyGallery = async () => {
@@ -1666,6 +1688,13 @@ function App() {
                 }}
               />
             </label>
+            <label>
+              社区分类 / Community
+              <select value={communityCategory} onChange={(e) => setCommunityCategory(Number(e.target.value))}>
+                {[[1, '默认'], [0, '最新'], [18, '推荐'], [3, '角色'], [4, '表情'], [5, '日常'], [6, '自然'], [7, '图标'], [8, '图案'], [9, '创意'], [31, '植物'], [32, '动物'], [33, '人物'], [35, '美食']].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </label>
+            <button onClick={handleFetchCommunity} disabled={itemsLoading}>浏览社区作品</button>
             <button
               onClick={handleFetchMyGallery}
               disabled={itemsLoading}
