@@ -16,9 +16,9 @@ type Album = { AlbumId:number; AlbumName:string; AlbumImageId:string; GalleryCnt
 const save = (blob: Blob, name: string) => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
 const fileName = (a: GalleryInfo) => `${String(a.FileName || 'art').replace(/[\\/:*?"<>|]/g, '_')}_${a.GalleryId}`;
 const dataBlob = (data: Uint8Array, type: string) => new Blob([new Uint8Array(data)], { type });
-async function list(filter: Filter, start: number): Promise<GalleryInfo[]> {
+async function list(filter: Filter, start: number, refreshIndex = 0, session:Session | null = null): Promise<GalleryInfo[]> {
   const endpoint = filter.author ? 'GetSomeoneListV3' : filter.query.trim() ? 'SearchGalleryV3' : 'GetCategoryFileListV2';
-  const body = { StartNum: start, EndNum: start + 29, Version: 19, RefreshIndex: 0, FileSize: filter.size, FileType: filter.type === 5 ? 5 : filter.size === 1 ? filter.type : filter.type + 2, FileSort: filter.sort, Classify: filter.category, ...(filter.author ? { SomeOneUserId: filter.author, ShowAllFlag: 0 } : filter.query.trim() ? { Keywords: filter.query.trim(), KeywordsEn: filter.query.trim() } : {}) };
+  const body = { StartNum: start, EndNum: start + 29, Version: 19, RefreshIndex: refreshIndex, ...(session ? {Token:session.token,UserId:session.userId} : {}), Command:endpoint,DeviceId:0, FileSize: filter.size, FileType: filter.type === 5 ? 5 : filter.size === 1 ? filter.type : filter.type + 2, FileSort: filter.sort, Classify: filter.category, ...(filter.author ? { SomeOneUserId: filter.author, ShowAllFlag: 0 } : filter.query.trim() ? { Keywords: filter.query.trim(), KeywordsEn: filter.query.trim() } : {}) };
   const host = 'appin.divoom-gz.com';
   const response = await fetch(`https://${host}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error(response.status === 429 ? '请求过于频繁，请稍等一分钟后重试。' : `社区服务返回 HTTP ${response.status}`);
@@ -102,6 +102,7 @@ function ArtistCard({artist, following, busy, decoder, onFollow, onOpen}: {artis
   return <article ref={host} className="directory-card artist-card"><div className="directory-head"><div className="artist-avatar">{artist.HeadId ? <LazyArt item={{GalleryId:-artist.UserId,FileId:artist.HeadId} as GalleryInfo} decoder={decoder} fallback={artist.NickName?.slice(0,1) || '?'}/> : <span>{artist.NickName?.slice(0,1) || '?'}</span>}</div><div><h3>{artist.NickName}</h3><p>{artist.FansCnt || 0} 粉丝</p></div></div><button disabled={busy} className={following ? 'follow-button is-following' : 'follow-button'} onClick={onFollow}>{following ? '取消关注' : '关注'}</button><button className="preview-strip preview-entry" aria-label={`查看 ${artist.NickName} 的作品`} onClick={onOpen}>{[0,1,2].map(i=><span key={i} className="preview-tile">{samples[i] ? <LazyArt item={samples[i]} decoder={decoder}/> : <span className="sample-placeholder">作品</span>}</span>)}</button></article>;
 }
 export default function Gallery() {
+  const refreshFeed = useRef({key:'',index:-1});
   const albumScroll = useRef(0); const authorOrigin = useRef({tab:'artists' as 'square'|'artists'|'albums'|'following',scroll:0,query:''}); const [authorDetail,setAuthorDetail]=useState<Artist | null>(null);
   const [openAlbumInfo, setOpenAlbumInfo] = useState<Album | null>(null); const [albumOffset, setAlbumOffset] = useState(1);
   const [tab, setTab] = useState<'square'|'artists'|'albums'|'following'>('square');
@@ -157,7 +158,7 @@ export default function Gallery() {
   const handleLogin = async () => { setLoginMessage('正在登录…'); try { const hash = SparkMD5.hash(password); const result = await login(email,hash); if (remember) localStorage.setItem(REMEMBER_KEY, JSON.stringify({email,hash})); else localStorage.removeItem(REMEMBER_KEY); setPassword(''); setSession(result); setLoginOpen(false); setLoginMessage('');  } catch(e) { setLoginMessage(`登录失败：${(e as Error).message}`); } };
   const load = async (f: Filter, offset: number, append = false) => {
     if (busy.current) return; busy.current = true; setLoading(true); setError('');
-    try { const result = await list(f, offset); setItems(old => (append ? [...old, ...result.filter(x => !old.some(y => y.GalleryId === x.GalleryId))] : result)); setMore(result.length >= 30); setStart(offset + 30); setActive(f); setShowFavorites(false); }
+    try { const key=JSON.stringify(f); if(!append) {refreshFeed.current = {key,index:refreshFeed.current.key===key ? refreshFeed.current.index+1 : 0};} const result = await list(f, offset,refreshFeed.current.index,session); setItems(old => (append ? [...old, ...result.filter(x => !old.some(y => y.GalleryId === x.GalleryId))] : result)); setMore(result.length >= 30); setStart(offset + 30); setActive(f); setShowFavorites(false); }
     catch (e) { setError((e as Error).message || '网络请求失败，请检查网络连接。'); }
     finally { busy.current = false; setLoading(false); }
   };
