@@ -18,13 +18,20 @@ const fileName = (a: GalleryInfo) => `${String(a.FileName || 'art').replace(/[\\
 const dataBlob = (data: Uint8Array, type: string) => new Blob([new Uint8Array(data)], { type });
 async function list(filter: Filter, start: number): Promise<GalleryInfo[]> {
   const endpoint = filter.author ? 'GetSomeoneListV3' : filter.query.trim() ? 'SearchGalleryV3' : 'GetCategoryFileListV2';
-  const body = { StartNum: start, EndNum: start + 29, Version: 19, RefreshIndex: 0, FileSize: filter.size, FileType: filter.type, FileSort: filter.sort, Classify: filter.category, ...(filter.author ? { SomeOneUserId: filter.author, ShowAllFlag: 0 } : filter.query.trim() ? { Keywords: filter.query.trim(), KeywordsEn: filter.query.trim() } : {}) };
+  const body = { StartNum: start, EndNum: start + 29, Version: 19, RefreshIndex: 0, FileSize: filter.size, FileType: filter.type === 5 ? 5 : filter.size === 1 ? filter.type : filter.type + 2, FileSort: filter.sort, Classify: filter.category, ...(filter.author ? { SomeOneUserId: filter.author, ShowAllFlag: 0 } : filter.query.trim() ? { Keywords: filter.query.trim(), KeywordsEn: filter.query.trim() } : {}) };
   const host = 'appin.divoom-gz.com';
   const response = await fetch(`https://${host}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error(response.status === 429 ? '请求过于频繁，请稍等一分钟后重试。' : `社区服务返回 HTTP ${response.status}`);
   const result = await response.json();
+  if (filter.size === 127 && filter.type !== 5 && endpoint !== 'SearchGalleryV3') {
+    const extraResponse = await fetch(`https://${host}/${endpoint}`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,FileType:filter.type})});
+    if (!extraResponse.ok) throw new Error(`社区服务返回 HTTP ${extraResponse.status}`);
+    const extra = await extraResponse.json();
+    if (extra.ReturnCode !== 0) throw new Error(`社区接口返回错误 ${extra.ReturnCode}`);
+    result.FileList = [...(result.FileList || []),...(extra.FileList || [])];
+  }
   if (result.ReturnCode !== 0) throw new Error(`社区接口返回错误 ${result.ReturnCode}，请稍后重试。`);
-  return (result.FileList || []).filter((item: GalleryInfo) => !item.HideFlag);
+  return (result.FileList || []).filter((item: GalleryInfo) => !item.HideFlag && (filter.type === 5 || (filter.type === 0 ? [0,2] : [1,3]).includes(Number(item.FileType)))).sort((a:GalleryInfo,b:GalleryInfo) => filter.sort === 1 ? Number(b.LikeCnt || 0)-Number(a.LikeCnt || 0) : Number(b.Date)-Number(a.Date));
 }
 // Bounded LRU stores decoded images, not object URLs, so off-screen views can release
 // browser image resources while recently viewed artwork remains instant to revisit.
@@ -150,7 +157,7 @@ export default function Gallery() {
   const handleLogin = async () => { setLoginMessage('正在登录…'); try { const hash = SparkMD5.hash(password); const result = await login(email,hash); if (remember) localStorage.setItem(REMEMBER_KEY, JSON.stringify({email,hash})); else localStorage.removeItem(REMEMBER_KEY); setPassword(''); setSession(result); setLoginOpen(false); setLoginMessage('');  } catch(e) { setLoginMessage(`登录失败：${(e as Error).message}`); } };
   const load = async (f: Filter, offset: number, append = false) => {
     if (busy.current) return; busy.current = true; setLoading(true); setError('');
-    try { const result = await list(f, offset); setItems(old => append ? [...old, ...result.filter(x => !old.some(y => y.GalleryId === x.GalleryId))] : result); setMore(result.length === 30); setStart(offset + result.length); setActive(f); setShowFavorites(false); }
+    try { const result = await list(f, offset); setItems(old => (append ? [...old, ...result.filter(x => !old.some(y => y.GalleryId === x.GalleryId))] : result).sort((a,b)=>f.sort===1 ? Number(b.LikeCnt || 0)-Number(a.LikeCnt || 0) : Number(b.Date)-Number(a.Date))); setMore(result.length >= 30); setStart(offset + 30); setActive(f); setShowFavorites(false); }
     catch (e) { setError((e as Error).message || '网络请求失败，请检查网络连接。'); }
     finally { busy.current = false; setLoading(false); }
   };
@@ -173,7 +180,7 @@ export default function Gallery() {
       {tab === 'square' && <><input aria-label="作者 ID" placeholder="作者 ID（可选）" inputMode="numeric" value={authorId} onChange={e => setAuthorId(e.target.value.replace(/\D/g, ''))} />
       <select aria-label="尺寸" value={filter.size} onChange={e => setFilter({...filter,size:Number(e.target.value)})}><option value={127}>全部尺寸</option><option value={1}>16 × 16</option><option value={2}>32 × 32</option><option value={4}>64 × 64</option><option value={16}>128 × 128</option><option value={32}>256 × 256</option></select>
       <select aria-label="类型" value={filter.type} onChange={e => setFilter({...filter,type:Number(e.target.value)})}><option value={5}>全部类型</option><option value={0}>静态</option><option value={1}>动画</option></select>
-      <select aria-label="排序" value={filter.sort} onChange={e => setFilter({...filter,sort:Number(e.target.value)})}><option value={0}>最新</option><option value={1}>热门</option></select><button disabled={loading} onClick={() => void load(authorId ? {...filter, author:Number(authorId), authorName:authorId, query:''} : filter,1)}>搜索 / 应用</button></>}</section>}
+      <select aria-label="排序" value={filter.sort} onChange={e => setFilter({...filter,sort:Number(e.target.value)})}><option value={0}>最新</option><option value={1}>热门（已加载作品）</option></select><button disabled={loading} onClick={() => void load(authorId ? {...filter, author:Number(authorId), authorName:authorId, query:''} : filter,1)}>搜索 / 应用</button></>}</section>}
     {tab !== 'square' && error && <p role="alert" className="gallery-error">{error}</p>}{tab !== 'square' && loading && <p>正在加载，请稍候…</p>}
     {(tab === 'artists' || tab === 'following') && <><div className="toolbar">{tab === 'following' ? '我的关注' : '达人'} · {(tab === 'following' ? followingArtists : artists).filter(x => x.NickName?.toLowerCase().includes(filter.query.toLowerCase())).length} 位 </div><section className="directory">{(tab === 'following' ? followingArtists : artists).filter(x => x.NickName?.toLowerCase().includes(filter.query.toLowerCase())).map(a => <ArtistCard key={a.UserId} artist={a} following={tab === 'following' || follows.includes(a.UserId)} busy={actionBusy} decoder={decoder.current} onFollow={()=>void toggleFollow(a.UserId)} onOpen={()=>void openAuthor(a)}/>)}</section>{tab === 'following' && !loading && followingArtists.length === 0 && <p>还没有关注的作者。</p>}{tab === 'following' && followingMore && session && <button className="more" disabled={loading} onClick={() => void loadFollowing(session, followingOffset)}>加载更多关注</button>}</>}
     {tab === 'albums' && <><div className="toolbar">合辑 · {albums.filter(x => x.AlbumName?.toLowerCase().includes(filter.query.toLowerCase())).length} 个</div><section className="directory">{albums.filter(x => x.AlbumName?.toLowerCase().includes(filter.query.toLowerCase())).map(a => <article className="directory-card" key={a.AlbumId}><img className="album-cover" crossOrigin="anonymous" src={`https://f.divoom-gz.com/${a.AlbumImageId}`} alt=""/><div><h3>{a.AlbumName}</h3><p>{a.GalleryCnt} 件作品</p></div><button className="preview-strip preview-entry" aria-label={`查看合辑 ${a.AlbumName}`} onClick={() => void openAlbum(a)}>{(a.GalleryList || []).slice(0,3).map(art => <span key={art.GalleryId} className="preview-tile"><LazyArt item={art} decoder={decoder.current}/></span>)}</button></article>)}</section></>}
