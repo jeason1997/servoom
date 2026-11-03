@@ -3,7 +3,7 @@ self.addEventListener('activate', event => event.waitUntil(self.clients.claim())
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') return;
-  event.respondWith(fetch(request).then(response => {
+  event.respondWith(fetch(request.mode === 'navigate' ? new Request(request, { cache: 'no-store' }) : request).then(response => {
     if (response.type === 'opaque' || response.status === 0) return response;
     const headers = new Headers(response.headers);
     headers.set('Cross-Origin-Opener-Policy', 'same-origin');

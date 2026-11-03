@@ -13,7 +13,8 @@
     <title>像素画廊</title>
     <script>
       if (!window.crossOriginIsolated && location.hostname.endsWith('.github.io') && 'serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../coi-sw.js', { scope: '../' }).then(function () {
+        navigator.serviceWorker.register('../coi-sw.js', { scope: '../', updateViaCache: 'none' }).then(function (registration) {
+          registration.update();
           if (!navigator.serviceWorker.controller) {
             navigator.serviceWorker.addEventListener('controllerchange', function () { location.reload(); }, { once: true });
           } else if (!sessionStorage.getItem('coi-reloaded')) {
