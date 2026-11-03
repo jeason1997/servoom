@@ -1483,6 +1483,20 @@ class PixelBeanDecoder:
         if not head:
             logger.error('Empty stream')
             return None
+        if head[0] in (3, 4):
+            # Legacy unencrypted 16x16 RGB still/animation containers.
+            if head[0] == 3:
+                count, speed = 1, 40
+            else:
+                header = fp.read(3)
+                if len(header) != 3:
+                    raise ValueError("Truncated legacy animation header")
+                count, speed = header[0], int.from_bytes(header[1:3], "big")
+            raw = fp.read()
+            if count < 1 or len(raw) != count * 768:
+                raise ValueError("Invalid legacy RGB frame length")
+            frames = [np.frombuffer(raw[i * 768:(i + 1) * 768], dtype=np.uint8).reshape(16, 16, 3).copy() for i in range(count)]
+            return PixelBean(metadata={}, total_frames=count, speed=speed, row_count=1, column_count=1, frames_data=frames)
         try:
             fmt = FileFormat(head[0])
         except ValueError:
