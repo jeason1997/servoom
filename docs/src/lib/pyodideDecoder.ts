@@ -140,7 +140,7 @@ export class PyodideDecoder {
   async ensureReady(): Promise<void> {
     if (!this.pyodide) {
       if (!this.readyPromise) {
-        this.readyPromise = this.initialize();
+        this.readyPromise = this.initialize().catch((error) => { this.readyPromise = null; this.pyodide = null; throw error; });
       }
       await this.readyPromise;
     }

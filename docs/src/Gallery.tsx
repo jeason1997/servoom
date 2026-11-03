@@ -78,7 +78,7 @@ function LazyArt({item, decoder, alt = '', fallback = '加载中'}: {item:Galler
       if (active) return; active = true; setFailed(false);
       const existing = cachedPreview(item.FileId);
       if (existing) { objectUrl = URL.createObjectURL(existing); setUrl(objectUrl); return; }
-      const task:PreviewJob = { cancelled:false, run:async () => { try { const raw=await downloadBinary(item.FileId); if(task.cancelled) return; const bean=await decoder.decode(raw); const blob=dataBlob(bean.webp,'image/webp'); cachePreview(item.FileId,blob); if(task.cancelled) return; objectUrl=URL.createObjectURL(blob); setUrl(objectUrl); } catch { if(!task.cancelled) setFailed(true); } } };
+      const task:PreviewJob = { cancelled:false, run:async () => { try { const raw=await downloadBinary(item.FileId); if(task.cancelled) return; const bean=await decoder.decode(raw); const blob=dataBlob(bean.webp,'image/webp'); cachePreview(item.FileId,blob); if(task.cancelled) return; objectUrl=URL.createObjectURL(blob); setUrl(objectUrl); } catch (error) { console.error('预览加载失败', item.GalleryId, error); if(!task.cancelled) setFailed(true); } } };
       job=task; previewQueue.push(task); processPreviews();
     }, { rootMargin:'250px' });
     observer.observe(node);

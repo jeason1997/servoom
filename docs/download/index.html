@@ -17,8 +17,8 @@
           registration.update();
           if (!navigator.serviceWorker.controller) {
             navigator.serviceWorker.addEventListener('controllerchange', function () { location.reload(); }, { once: true });
-          } else if (!sessionStorage.getItem('coi-reloaded')) {
-            sessionStorage.setItem('coi-reloaded', '1'); location.reload();
+          } else {
+            location.reload();
           }
         }).catch(function (error) { console.error('无法启用图片预览', error); });
       }
@@ -26,6 +26,12 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module">
+      if (!location.hostname.endsWith('.github.io') || window.crossOriginIsolated) {
+        import('/src/main.tsx');
+      } else {
+        document.getElementById('root').textContent = '正在准备图片预览…';
+      }
+    </script>
   </body>
 </html>
