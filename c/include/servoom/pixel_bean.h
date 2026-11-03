@@ -6,6 +6,7 @@
  *   9  (0x09) 16x16 animation, AES-CBC encrypted raw RGB
  *   17 (0x11) single picture, AES-CBC + LZO1X
  *   18 (0x12) 32x32 / 64x64 animation, AES-CBC + LZO1X per frame
+ *   19 (0x13) multi-tile drawing replay, raw RGB previews and painting records
  *   26 (0x1A) 64x64 / 128x128 animation, quantized-palette frames (0x0C) or the
  *             hierarchical palette scheme (0x11 / 0x13 / 0x15)
  *   31 (0x1F) 128x128 embedded JPEG animation
@@ -28,7 +29,7 @@ extern "C" {
 #endif
 
 typedef struct servoom_pixel_bean {
-    int format;        /* container format byte (8, 9, 12, 17, 18, 26, 31, 41, 42, 43) */
+    int format;        /* container format byte (8, 9, 12, 17, 18, 19, 26, 31, 41, 42, 43) */
     int total_frames;  /* number of decoded frames (may differ from the header's claim) */
     int speed;         /* frame delay in milliseconds */
     int row_count;     /* canvas height in 16-pixel tiles */

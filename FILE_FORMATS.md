@@ -9,6 +9,11 @@ wrong.
 
 ## Summary
 
+File-level **19 (0x13)** is also supported: a multi-tile drawing replay with raw RGB
+thumbnails and painting commands, rather than a compressed sequence of complete frames.
+See [the binary layout and MCU notes](docs/FORMAT_0x13.md). This is distinct from the
+0x13 palette-extension frame codec inside a format-26 file.
+
 | Format | Verdict | What the samples show |
 |-------:|---------|-----------------------|
 | 8 (0x08)  | **still only** | 16x16, exactly one frame, no header at all. Unknown to servoom until this survey. |

@@ -45,6 +45,7 @@ set(SERVOOM_SOURCES
   src/decoders/fmt12_banner.c
   src/decoders/fmt17_pic_multi.c
   src/decoders/fmt18_anim_multi.c
+  src/decoders/fmt19_sand.c
   src/decoders/fmt26_anim_multi64.c
   src/decoders/fmt26_hier.c
   src/decoders/fmt31_jpeg.c
@@ -89,6 +90,16 @@ endif()
 # ---- tests --------------------------------------------------------------------
 if(SERVOOM_BUILD_TESTS)
   enable_testing()
+  add_executable(test_format19 tests/test_format19.c)
+  target_link_libraries(test_format19 PRIVATE servoom)
+  target_include_directories(test_format19 PRIVATE src)
+  # These tests use assert(), including in Release builds.
+  if(MSVC)
+    target_compile_options(test_format19 PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(test_format19 PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME test_format19 COMMAND test_format19)
   foreach(t test_units test_corpus test_live)
     add_executable(${t} tests/${t}.c tests/testlib.c)
     target_link_libraries(${t} PRIVATE servoom PRIVATE libzstd_static webp webpdemux)

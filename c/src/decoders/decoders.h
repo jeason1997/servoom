@@ -41,6 +41,7 @@ servoom_status sv_decode_fmt09(const uint8_t *data, size_t len, servoom_pixel_be
 servoom_status sv_decode_fmt12(const uint8_t *data, size_t len, servoom_pixel_bean **out);
 servoom_status sv_decode_fmt17(const uint8_t *data, size_t len, servoom_pixel_bean **out);
 servoom_status sv_decode_fmt18(const uint8_t *data, size_t len, servoom_pixel_bean **out);
+servoom_status sv_decode_fmt19(const uint8_t *data, size_t len, servoom_pixel_bean **out);
 servoom_status sv_decode_fmt26(const uint8_t *data, size_t len, servoom_pixel_bean **out);
 servoom_status sv_decode_fmt31(const uint8_t *data, size_t len, servoom_pixel_bean **out);
 servoom_status sv_decode_fmt41(const uint8_t *data, size_t len, servoom_pixel_bean **out);

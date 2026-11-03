@@ -8,6 +8,7 @@ animation-only and which carry both):
                       the 64-frame right-to-left marquee a 16x16 device would show
 - ✓ Format 17 (0x11): multi-tile picture (always exactly one frame; 32x32 observed)
 - ✓ Format 18 (0x12): multi-tile animation (1..N frames; 32x32 and 16x16 1xN/Nx1 strips observed)
+- ✓ Format 19 (0x13): multi-tile sand drawing replay (raw previews + pixel commands)
 - ✓ Format 26 (0x1A): 64x64 or 128x128 animation (1..N frames; stills are 1-frame files)
 - ✓ Format 31 (0x1F): 128x128 embedded JPEG animation (animation-only in the wild)
 - ✓ Format 41 (0x29): JPEG sequence animations at 256x256 (no live sample known)
@@ -183,6 +184,7 @@ class FileFormat(Enum):
     PIC_MULTIPLE = 17
     ANIM_SINGLE = 9  # 16x16
     ANIM_MULTIPLE = 18  # 32x32 or 64x64
+    SAND_MULTIPLE = 19  # multi-tile drawing replay (not frame encryption type 0x13)
     ANIM_MULTIPLE_64 = 26  # 64x64 or 128x128
     ANIM_FORMAT_0x1F = 31  # Unknown format 31 (0x1F)
     ANIM_FORMAT_0x29 = 41  # Unknown format 41 (0x29) - hex dump stub
@@ -424,6 +426,69 @@ class AnimMultiDecoder(BaseDecoder):
             column_count=column_count,
             frames_data=frames_arrays,
         )
+
+
+class SandMultiDecoder(BaseDecoder):
+    """File 0x13: raw tiled previews followed by a drawing-command replay.
+
+    Normal strokes emit one frame per pixel; area-fill records apply all listed
+    pixels atomically. This matches Android's h3.e.d(), not its 24-frame thumbnail.
+    """
+
+    def decode(self) -> PixelBean:
+        def read_exact(size):
+            value = self._fp.read(size)
+            if len(value) != size:
+                raise ValueError('Truncated format 0x13 drawing data')
+            return value
+
+        rows, columns, preview_count = read_exact(3)
+        if not (1 <= rows <= 16 and 1 <= columns <= 16):
+            raise ValueError('Invalid format 0x13 canvas dimensions')
+        frame_bytes = rows * columns * 768
+        # These are sampled step thumbnails, not the animation's full frame set.
+        read_exact(preview_count * frame_bytes)
+        speed = int.from_bytes(read_exact(2), 'big')
+        background = read_exact(1)[0]
+        if background not in (0, 1):
+            raise ValueError('Invalid format 0x13 background flag')
+        canvas = bytearray(read_exact(frame_bytes) if background else bytes(frame_bytes))
+        frames = []
+
+        def emit():
+            if (len(frames) + 1) * frame_bytes > 512 * 1024 * 1024:
+                raise ValueError('Format 0x13 decoded animation exceeds 512 MiB')
+            frames.append(self._compact([canvas], 1, rows, columns)[0])
+
+        if background:
+            emit()
+        steps = int.from_bytes(read_exact(4), 'big')
+        for _ in range(steps):
+            count = int.from_bytes(read_exact(2), 'big')
+            color = read_exact(3)
+            if count == 0:
+                canvas[:] = color * (frame_bytes // 3)
+                emit()
+                continue
+            area_fill = bool(count & 0x8000)
+            for _ in range(count & 0x7fff):
+                tile, pixel = read_exact(2)
+                if tile >= rows * columns:
+                    raise ValueError('Format 0x13 pixel tile outside canvas')
+                pos = (tile * 256 + pixel) * 3
+                canvas[pos:pos + 3] = color
+                if not area_fill:
+                    emit()
+            if area_fill:
+                emit()
+        if self._fp.read(1):
+            raise ValueError('Unexpected trailing format 0x13 data')
+        if not frames:
+            emit()
+        return PixelBean(metadata={'sand_preview_count': preview_count,
+                                   'sand_step_count': steps},
+                         total_frames=len(frames), speed=speed, row_count=rows,
+                         column_count=columns, frames_data=frames)
 
 
 class Decoder0x1A(BaseDecoder):
@@ -1456,6 +1521,7 @@ def _decode_format_26(fp: IOBase) -> PixelBean:
 
 # Format byte -> callable(fp) -> PixelBean.
 _DECODERS = {
+    FileFormat.SAND_MULTIPLE: lambda fp: SandMultiDecoder(fp).decode(),
     FileFormat.PIC_SINGLE: lambda fp: PicSingleDecoder(fp).decode(),
     FileFormat.PIC_BANNER: lambda fp: BannerDecoder(fp).decode(),
     FileFormat.ANIM_SINGLE: lambda fp: AnimSingleDecoder(fp).decode(),
